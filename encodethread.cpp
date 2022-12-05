@@ -110,13 +110,51 @@ void EncodeThread::run() {
         return;
     }
 
-    /// 配置
+    /// 配置输入参数
     ctx->sample_rate = inSpec.sample_rate;
     ctx->ch_layout = inSpec.channel_layout;
     ctx->sample_fmt = inSpec.fmt;
+
     // 配置输出参数
     ctx->bit_rate = 32000; // 比特率
     ctx->profile = FF_PROFILE_AAC_HE_V2; // 规格
+
+    /**
+     * Initialize the AVCodecContext to use the given AVCodec. Prior to using this
+     * function the context has to be allocated with avcodec_alloc_context3().
+     *
+     * The functions avcodec_find_decoder_by_name(), avcodec_find_encoder_by_name(),
+     * avcodec_find_decoder() and avcodec_find_encoder() provide an easy way for
+     * retrieving a codec.
+     *
+     * 重点
+     * @note Always call this function before using decoding routines (such as
+     * @ref avcodec_receive_frame()).
+     *
+     * @code
+     * av_dict_set(&opts, "b", "2.5M", 0);
+     * codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+     * if (!codec)
+     *     exit(1);
+     *
+     * context = avcodec_alloc_context3(codec);
+     *
+     * if (avcodec_open2(context, codec, opts) < 0)
+     *     exit(1);
+     * @endcode
+     *
+     * @param avctx The context to initialize.
+     * @param codec The codec to open this context for. If a non-NULL codec has been
+     *              previously passed to avcodec_alloc_context3() or
+     *              for this context, then this parameter MUST be either NULL or
+     *              equal to the previously passed codec.
+     * @param options A dictionary filled with AVCodecContext and codec-private options.
+     *                On return this object will be filled with options that were not found.
+     *
+     * @return zero on success, a negative value on error
+     * @see avcodec_alloc_context3(), avcodec_find_decoder(), avcodec_find_encoder(),
+     *      av_dict_set(), av_opt_find().
+     */
     if (avcodec_open2(ctx, codec, nullptr) < 0) {
         ERROR_BUF(res);
         qDebug() << "avcodec_open2 error" << errbuf;
@@ -150,6 +188,7 @@ void EncodeThread::run() {
     /**
      * Allocate new buffer(s) for audio or video data.
      *
+     * 重点
      * The following fields must be set on frame before calling this function:
      * - format (pixel format for video, sample format for audio)
      * - width and height for video
