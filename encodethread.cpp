@@ -89,6 +89,7 @@ void EncodeThread::run() {
     QFile pcm(IN_FILE);
     QFile aac(OUT_FILE);
     int res = 0;
+    int frameBufferSize = 0;
 
     codec = avcodec_find_encoder_by_name("libfdk_aac");
     if (codec == nullptr) {
@@ -144,7 +145,7 @@ void EncodeThread::run() {
     frame->nb_samples = ctx->frame_size;
     frame->ch_layout = inSpec.channel_layout;
     frame->format = inSpec.fmt;
-
+    qDebug() << "frame_size" << ctx->frame_size;
     /* allocate the data buffers */
     /**
      * Allocate new buffer(s) for audio or video data.
@@ -182,8 +183,17 @@ void EncodeThread::run() {
         goto end;
     }
 
-    while ((res == pcm.read((char *) frame->data[0],
-                            frame->linesize[0])) > 0) {
+    frameBufferSize = frame->linesize[0];
+    while ((res = pcm.read((char *) frame->data[0],
+                            frameBufferSize)) > 0) {
+        /// 处理读到文件（PCM）末尾，样本帧的数量 < 预期样本帧的数量，从而导致一些不正确的尾部数据会被 send 给编码器
+        if (res < frameBufferSize) {
+            int nb_channels = frame->ch_layout.nb_channels;
+            int bytesPerSample = av_get_bytes_per_sample(inSpec.fmt);
+            /// 通过更改 frame->nb_samples 的数量来决定 AVFrame 缓冲区的大小
+            /// 这样在 avcodec_send_frame 的时候，就会一次性将缓冲区的所有内容就交给编码器去处理
+            frame->nb_samples = res / (nb_channels * bytesPerSample);
+        }
         qDebug() << "linesize: " << frame->linesize[0];
         int ret = audio_encode(ctx, frame, packet, aac);
         if (ret < 0) {
